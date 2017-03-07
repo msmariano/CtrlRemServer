@@ -1,23 +1,23 @@
 /*
  * CtrlRemServer.cpp
  *
- *  Created on: Aug 21, 2015
- *      Author: Marcelo dos Santos Mariano
- *  07/03/2017 - Inserido função de retorno do Arduino. Inserindo controle versao inicial V_1.0.0
+ *  Criação: 21/08/2015
+ *      Autor: Marcelo dos Santos Mariano
+ *  07/03/2017 - Inserido função de retorno do Arduino. 
+ 					- Inserindo controle versão inicial V_1.0.0.
  *  
  */
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <termios.h>	/* Configuração da linha série */
+#include <termios.h>
 #include <unistd.h>
-#include <signal.h>	/* Instalação de rotina para Ctrl-C */
-#include <getopt.h>	/* Tratamento da linha de comando */
+#include <signal.h>	
+#include <getopt.h>	
 #include <fcntl.h>
 #include <sys/types.h>
-
 #include <errno.h>
-#include <curses.h>	/* Gestão do teclado */
+#include <curses.h>	
 #include <ctype.h>
 #include <time.h>
 #include <string.h>
@@ -26,47 +26,27 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-
 #include <pthread.h>
 #include <semaphore.h>
 #include <sys/ipc.h>
 
 #define DEFAULT_COMM_DEVICE "/dev/ttyATH0"
+#define ACTION_ACTGATE  "Act"
+#define ACTION_TEST  "Test"
+#define ACTION_CFG  "Cfg"
 #define DEFAULT_BAUDRATE B9600
-
 #define _DEBUG
 
 bool bAct;
-
-
-
-/*
-<?xml version="1.0" encoding="UTF-8"?>
- - <note>
-       <to>Tove</to>
-       <from>Jani</from>
-       <heading>Reminder</heading>
-       <body>Don't forget me this weekend!</body>
-   </note>
-
-<?xml version="1.0" encoding="UTF-8"?>
-<objeto>
-    <porteiro>
-		<tipo>comando</tipo>
-		<acao>0</acao>
-		<imei>????????????????</imei>
-	</porteiro>
-</objeto>  
-
-*/
-
-
-
+extern char *optarg;
+extern int optind, opterr, optopt;
+struct termios comm_config_orig; 
+char CommDevice[32] = DEFAULT_COMM_DEVICE; 
+int CommPort; 
 
 
 
@@ -78,15 +58,17 @@ typedef struct stPessoa
 
 }st_Pessoa;
 
-/* Variáveis para o processamento das opções de linha de comando */
-extern char *optarg;
-extern int optind, opterr, optopt;
-struct termios comm_config_orig; /* configuracao original */
+typedef struct
+{
+	sem_t sema;
+	int val;
+	char * str;
+	int idSocket;
+	bool bGo;
+}HANDLE;
 
-/* Variáveis globais que armazenam vários valores de configuração */
-/* Neste ponto são inicializadas com os valores "default" */
-char CommDevice[32] = DEFAULT_COMM_DEVICE; /* Porta série */
-int CommPort; /* file descriptor da porta série. */
+
+
 
 /* comunicação serial */
 int InitLinhaSerie(char *LinhaSerie, struct termios *p_oldtio) {
@@ -142,7 +124,9 @@ int InitLinhaSerie(char *LinhaSerie, struct termios *p_oldtio) {
 
 void fLogarErro(char * sErro)
 {
-
+#ifdef _DEBUG
+	printf("%s\r\n",sErro);
+#endif
 }
 
 char ** split(char * sMens, char * sSeparador)
@@ -159,12 +143,73 @@ bool bParseCfg(char * sMens)
   return false;
 }
 
+HANDLE * CreateEvent(char * str)
+{
+
+	HANDLE * ret = malloc(sizeof(HANDLE));
+	sem_t sema;
+	sem_init(&sema, 0, 1);
+	ret->sema = sema;
+	ret->val =1;
+	ret->str = str;
+	ret->bGo = true;
+	return ret;
+}
+int WaitForEvent(HANDLE * id,int time)
+{
+
+	int ret = -1;
+	while(true)
+	{
+		sem_wait(&id->sema);
+		if(id->val == 0 || time == 0)
+		{
+			if(time == 0)
+			{
+				ret = 0;
+			}
+			else
+				ret = 1;
+			sem_post(&id->sema);
+			break;
+		}
+		sem_post(&id->sema);
+		if(time > -1)
+		{
+			time--;
+			sleep(1);
+		}
+		usleep(1000);
+	}
+
+	return ret;
+}
+
+void SetEvent(HANDLE *  id)
+{
+	sem_wait(&id->sema);
+
+	id->val = 0;
+
+	sem_post(&id->sema);
+}
+
+
+void writeToSerialLn(char * mens)
+{
+	write(CommPort,mens,strlen(mens));
+	write(CommPort,"\n",1);
+	sleep(1);
+}
+
+
 /*Thread para tratamento da entrada serial*/
 void * leSerial(void * arg)
 {
-	int * iSocket = (int*)arg;
+	HANDLE * ev  = (HANDLE*)arg;	
+		
 #ifdef _DEBUG
-	printf("id do socket%d...\r\n",*iSocket);
+	printf("id do socket[%d]...\r\n",ev->idSocket);
 #endif	
 	
 	int i = 0;
@@ -172,7 +217,7 @@ void * leSerial(void * arg)
 	int indice = 0;
 	char c = '\0';
   	char bufferSerial[1024] = "";
-	while(true)
+	while(ev->bGo)
 	{		
 #ifdef _DEBUG
 		sleep(1);
@@ -181,10 +226,14 @@ void * leSerial(void * arg)
 		rc = read(CommPort,&c, 1);
 		if(rc == 1 &&c == '\n')
 		{			
-		  if(bAct)
-		    write(*iSocket, bufferSerial, sizeof(bufferSerial));
+		  if (send(ev->idSocket, bufferSerial,sizeof(bufferSerial), 0) == -1)
+		  {
+			  fLogarErro("Erro enviando!\n");
+		  }			  
 		  indice = 0;
 		  bzero(bufferSerial,1024);
+		  SetEvent(ev);
+		  break;
 		}
 		else if(rc == 1)
 		{
@@ -194,14 +243,56 @@ void * leSerial(void * arg)
 			{
 				indice = 0;
 				bzero(bufferSerial,1024);
+				 SetEvent(ev);
+		       break;
 			}
 		}
 	}
 	
 }
+//void PerfomanceActionBySerial(char * act,int newsockfd,int test=0);
+void PerfomanceActionBySerial(char * act,int newsockfd,int test)
+{
+  HANDLE * ev = CreateEvent(NULL);
+  if(!test)
+    writeToSerialLn(act);
+  else 
+  {
+  	 if (send(newsockfd, "Testando...\n",sizeof("Testando..."), 0) == -1)
+	 {
+			  fLogarErro("Erro enviando!\n");
+	 }
+	 return;
+  }
+  pthread_t hTh;
+  ev->idSocket = newsockfd;
+  int iDTh = pthread_create(&hTh,NULL,leSerial,ev);
+  if(!WaitForEvent(ev,5))
+  {
+#ifdef _DEBUG
+	printf("Failed...\r\n");
+#endif
+    tcflush(CommPort, TCIFLUSH);
+	 ev->bGo = false;
+	 if (send(newsockfd, "Falhou performance serial...\n",sizeof("Falhou performance serial...\n"), 0) == -1)
+	 {
+			  fLogarErro("Falhou performance serial...\n");
+	 }
+	 
+  }
+  else 
+  {
+#ifdef _DEBUG
+	printf("Sucesso...\r\n");
+#endif
+  	
+  }
+  free(ev);
+}
 
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) 
+{
 
 #ifdef _DEBUG
 	printf("Iniciando...\r\n");
@@ -218,13 +309,13 @@ int main(int argc, char *argv[]) {
    bAct = false;
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) {
+	if (sockfd < 0) 
+	{
 		fLogarErro("ERROR opening socket\n");
-
 	}
 
 	bzero((char *) &serv_addr, sizeof(serv_addr));
-	portno = atoi("81");
+	portno = atoi("8888");
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	serv_addr.sin_port = htons(portno);
@@ -238,17 +329,22 @@ int main(int argc, char *argv[]) {
 	CommPort = InitLinhaSerie(CommDevice, &comm_config_orig);
 #endif
 
+#ifdef _DEBUG
 	/*Inicializa thread para leitura da entrada serial*/
 	pthread_t hTh;
-	newsockfd = -1234;
-	int iDTh = pthread_create(&hTh,NULL,leSerial,&newsockfd);	
-	
-#ifdef _DEBUG
-	printf("Thread leitura serial iniciada...\r\n");
+	HANDLE * ev = CreateEvent(NULL);
+	ev->idSocket = sockfd;
+	int iDTh = pthread_create(&hTh,NULL,leSerial,ev);	
+	WaitForEvent(ev,5);
+	tcflush(CommPort, TCIFLUSH);
+	ev->bGo = false;
+	printf("Thread leitura serial testada...\r\n");
+	printf("Servidor iniciado...\r\n");
 #endif
 
    
-	while (true) {
+	while (true) 
+	{
 		bAct = false;
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 		memset(sMens,0,255);
@@ -257,33 +353,40 @@ int main(int argc, char *argv[]) {
 		}
 		bzero(buffer, 256);
 		n = read(newsockfd, buffer, 255);
-		if (n < 0) {
+		if (n < 0) 
+		{
 			fLogarErro("ERROR reading from socket\n");
 		}
 
-		if (strstr(buffer, "act") != NULL) {
-
-			write(CommPort, "Act", 3);
-			write(CommPort, "\n", 1);
-			sleep(1);
-			strcpy(sMens,"Bemvindo!\n");
-
-		} 
-		else if (strstr(buffer, "teste") != NULL)
+		if (strstr(buffer, "act") != NULL) 
 		{
+			HANDLE * ev = CreateEvent(NULL);
+			writeToSerialLn(ACTION_ACTGATE);
+			pthread_t hTh;
+			ev->idSocket = newsockfd;
+			int iDTh = pthread_create(&hTh,NULL,leSerial,ev);
+			if(!WaitForEvent(ev,5))
+			{
+			  tcflush(CommPort, TCIFLUSH);
+			  ev->bGo = false;
+		   }
+		   free(ev);
 			
+			
+		} 
+		else if (strstr(buffer, "test") != NULL)
+		{
+			PerfomanceActionBySerial(ACTION_TEST,newsockfd,0);
 		}
 		else if (strstr(buffer, "cfg") != NULL) 
-		{
+		{		
+			writeToSerialLn(ACTION_CFG);			
 		}	 
 		else 
 		{
 		  strcpy(sMens,"Void\n");
 		}
-		if (send(newsockfd, sMens,sizeof(sMens), 0) == -1){
-			fLogarErro("Erro enviando!\n");
-		}
-
+		
 		close(newsockfd);
 
 	}
