@@ -39,9 +39,12 @@
 #define ACTION_TEST  "Test"
 #define ACTION_CFG  "Cfg"
 #define DEFAULT_BAUDRATE B9600
+#define PORT_SERVER "8888"
 #define _DEBUG
+#define _SERIALON
 
-bool bAct;
+
+
 extern char *optarg;
 extern int optind, opterr, optopt;
 struct termios comm_config_orig; 
@@ -122,7 +125,7 @@ int InitLinhaSerie(char *LinhaSerie, struct termios *p_oldtio) {
 	return fd;
 }
 
-void fLogarErro(char * sErro)
+void logar(char * sErro)
 {
 #ifdef _DEBUG
 	printf("%s\r\n",sErro);
@@ -228,7 +231,7 @@ void * leSerial(void * arg)
 		{			
 		  if (send(ev->idSocket, bufferSerial,sizeof(bufferSerial), 0) == -1)
 		  {
-			  fLogarErro("Erro enviando!\n");
+			  logar("Erro enviando!\n");
 		  }			  
 		  indice = 0;
 		  bzero(bufferSerial,1024);
@@ -260,7 +263,7 @@ void PerfomanceActionBySerial(char * act,int newsockfd,int test)
   {
   	 if (send(newsockfd, "Testando...\n",sizeof("Testando..."), 0) == -1)
 	 {
-			  fLogarErro("Erro enviando!\n");
+			  logar("Erro enviando!\n");
 	 }
 	 return;
   }
@@ -276,7 +279,7 @@ void PerfomanceActionBySerial(char * act,int newsockfd,int test)
 	 ev->bGo = false;
 	 if (send(newsockfd, "Falhou performance serial...\n",sizeof("Falhou performance serial...\n"), 0) == -1)
 	 {
-			  fLogarErro("Falhou performance serial...\n");
+			  logar("Falhou performance serial...\n");
 	 }
 	 
   }
@@ -293,34 +296,30 @@ void PerfomanceActionBySerial(char * act,int newsockfd,int test)
 
 int main(int argc, char *argv[]) 
 {
-
-#ifdef _DEBUG
-	printf("Iniciando...\r\n");
-#endif
-
-    
+	logar("Iniciando...");
 	char sMens[255];
 	int sockfd, newsockfd, portno;
 	socklen_t clilen;
 	char buffer[256];
 	struct sockaddr_in serv_addr, cli_addr;
 	int n;
-	st_Pessoa pMarcelo;
-   bAct = false;
+	
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) 
 	{
-		fLogarErro("ERROR opening socket\n");
+		logar("ERROR opening socket");
+		exit(1);
 	}
 
 	bzero((char *) &serv_addr, sizeof(serv_addr));
-	portno = atoi("8888");
+	portno = atoi(PORT_SERVER);
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	serv_addr.sin_port = htons(portno);
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-		fLogarErro("ERROR on binding\n");
+		logar("ERROR on binding\n");
+		exit(1);
 	}
 	listen(sockfd, 5);
 	clilen = sizeof(cli_addr);
@@ -330,58 +329,33 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef _DEBUG
-	/*Inicializa thread para leitura da entrada serial*/
-	pthread_t hTh;
-	HANDLE * ev = CreateEvent(NULL);
-	ev->idSocket = sockfd;
-	int iDTh = pthread_create(&hTh,NULL,leSerial,ev);	
-	WaitForEvent(ev,5);
-	tcflush(CommPort, TCIFLUSH);
-	ev->bGo = false;
-	printf("Thread leitura serial testada...\r\n");
-	printf("Servidor iniciado...\r\n");
+   printf("Servidor iniciado id[%d]...\r\n",sockfd);
 #endif
 
    
 	while (true) 
 	{
-		bAct = false;
+	
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 		memset(sMens,0,255);
 		if (newsockfd < 0) {
-			fLogarErro("ERROR on accept\n");
+			logar("ERROR on accept\n");
+			continue;
 		}
 		bzero(buffer, 256);
 		n = read(newsockfd, buffer, 255);
-		if (n < 0) 
+		if (n <= 0) 
 		{
-			fLogarErro("ERROR reading from socket\n");
+			logar("ERROR reading from socket\n");
+			continue;			
 		}
 
 		if (strstr(buffer, "act") != NULL) 
-		{
-			HANDLE * ev = CreateEvent(NULL);
-			writeToSerialLn(ACTION_ACTGATE);
-			pthread_t hTh;
-			ev->idSocket = newsockfd;
-			int iDTh = pthread_create(&hTh,NULL,leSerial,ev);
-			if(!WaitForEvent(ev,5))
-			{
-			  tcflush(CommPort, TCIFLUSH);
-			  ev->bGo = false;
-		   }
-		   free(ev);
-			
-			
-		} 
+		  PerfomanceActionBySerial(ACTION_ACTGATE,newsockfd,0);
 		else if (strstr(buffer, "test") != NULL)
-		{
-			PerfomanceActionBySerial(ACTION_TEST,newsockfd,0);
-		}
+	     PerfomanceActionBySerial(ACTION_TEST,newsockfd,0);
 		else if (strstr(buffer, "cfg") != NULL) 
-		{		
-			writeToSerialLn(ACTION_CFG);			
-		}	 
+		  PerfomanceActionBySerial(ACTION_CFG,newsockfd,0);	
 		else 
 		{
 		  strcpy(sMens,"Void\n");
