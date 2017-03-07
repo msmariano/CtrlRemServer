@@ -2,10 +2,11 @@
  * CtrlRemServer.cpp
  *
  *  Created on: Aug 21, 2015
- *      Author: marcelo
+ *      Author: Marcelo dos Santos Mariano
+ *  07/03/2017 - Inserido função de retorno do Arduino. Inserindo controle versao inicial V_1.0.0
+ *  
  */
 
-//teste
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>	/* Configuração da linha série */
@@ -38,7 +39,9 @@
 #define DEFAULT_COMM_DEVICE "/dev/ttyATH0"
 #define DEFAULT_BAUDRATE B9600
 
+#define _DEBUG
 
+bool bAct;
 
 
 
@@ -156,9 +159,55 @@ bool bParseCfg(char * sMens)
   return false;
 }
 
+/*Thread para tratamento da entrada serial*/
+void * leSerial(void * arg)
+{
+	int * iSocket = (int*)arg;
+#ifdef _DEBUG
+	printf("id do socket%d...\r\n",*iSocket);
+#endif	
+	
+	int i = 0;
+	int rc =0;
+	int indice = 0;
+	char c = '\0';
+  	char bufferSerial[1024] = "";
+	while(true)
+	{		
+#ifdef _DEBUG
+		sleep(1);
+		printf("Executando thread[%d]...\r\n",i++);
+#endif
+		rc = read(CommPort,&c, 1);
+		if(rc == 1 &&c == '\n')
+		{			
+		  if(bAct)
+		    write(*iSocket, bufferSerial, sizeof(bufferSerial));
+		  indice = 0;
+		  bzero(bufferSerial,1024);
+		}
+		else if(rc == 1)
+		{
+			bufferSerial[indice] = c;
+			indice++;
+			if(indice == 1024)
+			{
+				indice = 0;
+				bzero(bufferSerial,1024);
+			}
+		}
+	}
+	
+}
+
 
 int main(int argc, char *argv[]) {
 
+#ifdef _DEBUG
+	printf("Iniciando...\r\n");
+#endif
+
+    
 	char sMens[255];
 	int sockfd, newsockfd, portno;
 	socklen_t clilen;
@@ -166,7 +215,7 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in serv_addr, cli_addr;
 	int n;
 	st_Pessoa pMarcelo;
-
+   bAct = false;
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) {
@@ -185,9 +234,22 @@ int main(int argc, char *argv[]) {
 	listen(sockfd, 5);
 	clilen = sizeof(cli_addr);
 
+#ifdef _SERIALON
 	CommPort = InitLinhaSerie(CommDevice, &comm_config_orig);
+#endif
 
+	/*Inicializa thread para leitura da entrada serial*/
+	pthread_t hTh;
+	newsockfd = -1234;
+	int iDTh = pthread_create(&hTh,NULL,leSerial,&newsockfd);	
+	
+#ifdef _DEBUG
+	printf("Thread leitura serial iniciada...\r\n");
+#endif
+
+   
 	while (true) {
+		bAct = false;
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 		memset(sMens,0,255);
 		if (newsockfd < 0) {
@@ -207,6 +269,10 @@ int main(int argc, char *argv[]) {
 			strcpy(sMens,"Bemvindo!\n");
 
 		} 
+		else if (strstr(buffer, "teste") != NULL)
+		{
+			
+		}
 		else if (strstr(buffer, "cfg") != NULL) 
 		{
 		}	 
@@ -222,6 +288,7 @@ int main(int argc, char *argv[]) {
 
 	}
 
+	pthread_exit(NULL);
 	return 0;
 
 }
