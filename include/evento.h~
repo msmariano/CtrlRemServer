@@ -1,0 +1,18 @@
+#include <semaphore.h>
+#include <sys/ipc.h>
+#include <sys/types.h>
+#include <ctype.h>
+
+typedef struct
+{
+	sem_t sema;
+	int val;
+	char * str;
+	int idSocket;
+	bool bGo;
+}HANDLE;
+
+HANDLE * CreateEvent(char * str);
+int WaitForEvent(HANDLE * id,int time);
+void SetEvent(HANDLE *  id);
+
