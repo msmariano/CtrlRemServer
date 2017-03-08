@@ -42,7 +42,7 @@
 extern char *optarg;
 extern int optind, opterr, optopt;
 struct termios comm_config_orig; 
-int CommPort; 
+static int CommPort; 
 #endif
 
 int InitLinhaSerie(char *LinhaSerie, struct termios *p_oldtio);

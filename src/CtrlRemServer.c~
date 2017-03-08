@@ -90,9 +90,9 @@ int main(int argc, char *argv[])
 
 		if (strstr(buffer, "act") != NULL) 
 		  PerfomanceActionBySerial(ACTION_ACTGATE,newsockfd,0);
-		else if (strstr(buffer, "test") != NULL)
+		else if (strstr(buffer, ACTION_TEST) != NULL)
 	     PerfomanceActionBySerial(ACTION_TEST,newsockfd,0);
-		else if (strstr(buffer, "cfg") != NULL) 
+		else if (strstr(buffer, ACTION_CFG) != NULL) 
 		  PerfomanceActionBySerial(ACTION_CFG,newsockfd,0);
 		else if ( strstr(buffer, ACTION_TESTNET) != NULL)
 		{
