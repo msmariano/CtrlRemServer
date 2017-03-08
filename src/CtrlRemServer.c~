@@ -35,19 +35,7 @@ void logar(char * sErro)
 #endif
 }
 
-char ** split(char * sMens, char * sSeparador)
-{
-}
 
-bool bGravarPessoa(st_Pessoa stPessoa)
-{
-  return false;
-}
-
-bool bParseCfg(char * sMens)
-{
-  return false;
-}
 
 
 
