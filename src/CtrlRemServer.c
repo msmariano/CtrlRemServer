@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
 	printf("Porta do Servidor [%s]...\r\n",PORT_SERVER);
 #endif
 
-	char sMens[255];
+	char sMens[1024];
 	int sockfd, newsockfd, portno;
 	socklen_t clilen;
 	char buffer[256];
@@ -90,17 +90,18 @@ int main(int argc, char *argv[])
 
 		if (strstr(buffer, "act") != NULL) 
 		  PerfomanceActionBySerial(ACTION_ACTGATE,newsockfd,0);
-		else if (strstr(buffer, "test") != NULL)
+		else if (strstr(buffer, ACTION_TEST) != NULL)
 	     PerfomanceActionBySerial(ACTION_TEST,newsockfd,0);
-		else if (strstr(buffer, "cfg") != NULL) 
+		else if (strstr(buffer, ACTION_CFG) != NULL) 
 		  PerfomanceActionBySerial(ACTION_CFG,newsockfd,0);
 		else if ( strstr(buffer, ACTION_TESTNET) != NULL)
 		{
 			PerfomanceActionBySerial(ACTION_TESTNET,newsockfd,1);
 		}
 		else 
-		{
-		  if (send(newsockfd, "Nenhuma comando recebido...",sizeof("Nenhuma comando recebido..."), 0) == -1)
+		{ 
+			strcpy(sMens,"Nenhuma comando válido recebido...");
+		  if (send(newsockfd, sMens,strlen(sMens), 0) == -1)
 	     { 
 #ifdef _DEBUG
 		printf("Erro enviando socket[2]...\r\n");
