@@ -45,5 +45,5 @@ int CommPort;
 int InitLinhaSerie(char *LinhaSerie, struct termios *p_oldtio);
 void writeToSerialLn(char * mens);
 void * leSerial(void * arg);
-void PerfomanceActionBySerial(act,newsockfd,test=0){char * act,int newsockfd,int test};
+void PerfomanceActionBySerial(char * act,int newsockfd,int test);
 

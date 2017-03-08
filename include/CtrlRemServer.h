@@ -29,6 +29,9 @@
 #define ACTION_ACTGATE  "Act"
 #define ACTION_TEST  "Test"
 #define ACTION_CFG  "Cfg"
+
+#define ACTION_TESTNET "TestNet"
+
 #define DEFAULT_BAUDRATE B9600
 #define PORT_SERVER "8888"
 #define _DEBUG

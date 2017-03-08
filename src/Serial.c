@@ -89,7 +89,9 @@ void * leSerial(void * arg)
 		{			
 		  if (send(ev->idSocket, bufferSerial,sizeof(bufferSerial), 0) == -1)
 		  {
-			  logar("Erro enviando!\n");
+#ifdef _DEBUG
+		printf("Erro enviando socket...\r\n");
+#endif
 		  }			  
 		  indice = 0;
 		  bzero(bufferSerial,1024);
@@ -121,7 +123,10 @@ void PerfomanceActionBySerial(char * act,int newsockfd,int test)
   {
   	 if (send(newsockfd, "Testando...\n",sizeof("Testando..."), 0) == -1)
 	 {
-			  logar("Erro enviando!\n");
+#ifdef _DEBUG
+		printf("Erro enviando socket[1]...\r\n");
+#endif
+			 
 	 }
 	 return;
   }
@@ -137,7 +142,10 @@ void PerfomanceActionBySerial(char * act,int newsockfd,int test)
 	 ev->bGo = false;
 	 if (send(newsockfd, "Falhou performance serial...\n",sizeof("Falhou performance serial...\n"), 0) == -1)
 	 {
-			  logar("Falhou performance serial...\n");
+#ifdef _DEBUG
+		printf("Falhou performance serial...\r\n");
+#endif
+			  
 	 }
 	 
   }
