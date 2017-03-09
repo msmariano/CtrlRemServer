@@ -4,8 +4,8 @@
  *  Criação: 21/08/2015
  *      Autor: Marcelo dos Santos Mariano
  *  07/03/2017 - Inserido função de retorno do Arduino. 
- 					- Inserindo controle versão inicial V_1.0.0.
- 	 08/03/2017 - Organizando Projeto
+ *					- Inserindo controle versão inicial V_1.0.0.
+ *	 08/03/2017 - Organizando Projeto
  *  
  */
 
